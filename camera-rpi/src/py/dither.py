@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, List
 from cartonify import Cartonifier
+import logging
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 
 class Dither:
 
@@ -30,11 +34,20 @@ class Dither:
 
     @staticmethod
     def floyd_steinberg(image):
+        """
+        err_diff_matrix = [[          *    7/16   ],
+                           [   3/16  5/16  1/16   ]]
+
+
+        """
+        err_diff = np.array([[0.0, 0.0, 7.0/16], [3.0/16, 5.0/16, 1.0/16]], dtype=np.float32)
         if image.ndim != 2:
-            _image = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
-        _image = cv.copyMakeBorder(_image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
-        rows, cols = np.shape(_image)
-        out = cv.normalize(_image.astype('float'), None, 0.0, 1.0, cv.NORM_MINMAX)
+            out = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+        else:
+            out = image.copy()
+        out = cv.copyMakeBorder(out, 1, 1, 1, 1, cv.BORDER_REPLICATE)
+        rows, cols = np.shape(out)
+        out = cv.normalize(out.astype(np.float32), None, 0.0, 1.0, cv.NORM_MINMAX)
         for i in range(1, rows - 1):
             for j in range(1, cols - 1):
                 # threshold step
@@ -45,12 +58,16 @@ class Dither:
                     err = out[i][j]
                     out[i][j] = 0
                 # error diffusion step
-                out[i][j + 1] = out[i][j + 1] + ((7/16) * err)
-                out[i + 1][j - 1] = out[i + 1][j - 1] + ((3/16) * err)
-                out[i + 1][j] = out[i + 1][j] + ((5/16) * err)
-                out[i + 1][j + 1] = out[i + 1][j + 1] + ((1/16) * err)
+                out[i:i+1, j-1:j+1] = out[i:i+1, j-1:j+1] + err_diff * err
+                # out[i][j + 1] = out[i][j + 1] + ((7/16) * err)
+                # out[i + 1][j - 1] = out[i + 1][j - 1] + ((3/16) * err)
+                # out[i + 1][j] = out[i + 1][j] + ((5/16) * err)
+                # out[i + 1][j + 1] = out[i + 1][j + 1] + ((1/16) * err)
         out = (out*255).astype(np.uint8)
         return (out[1:rows - 1, 1:cols - 1])
+
+    @staticmethod
+    def floyd_steinberg
 
     @staticmethod
     def jarvis_judice_ninke(image):
