@@ -2,23 +2,101 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, List
-from cartonify import Cartonifier
 import logging
 import time
-from msxcolor import MSXColor
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 class Dither:
 
+    SIMPLE = 0
+    FLOYD_STEINBERG = 1
+    JARVIS_JUDICE_NINKE = 2
+    SIMPLE_RGB = 3
+
+    # x/16 lookup table
+    _1o16 = 1/16
+    _3o16 = 3/16
+    _5o16 = 5/16
+    _7o16 = 7/16
+    # x/48 lookup table
+    _1o48 = 1/48
+    _3o48 = 3/48
+    _5o48 = 5/48
+    _7o48 = 7/48
+
+    @staticmethod
+    def dither(image, style):
+        if style == Dither.SIMPLE:
+            return Dither.simple(image)
+        elif style == Dither.FLOYD_STEINBERG:
+            return Dither.floyd_steinberg(image)
+        elif style == Dither.JARVIS_JUDICE_NINKE:
+            return Dither.jarvis_judice_ninke(image)
+        elif style == Dither.SIMPLE_RGB:
+            return Dither.simple_rgb(image)
+        else:
+            raise ValueError("Requested dither style does not exist.")
+
+    @staticmethod
+    def simple_rgb(image, depth=2):
+        if image.ndim != 3 and image.shape[2] != 3:
+            raise RuntimeError(f"Image does not have the right dimensions.")
+        out = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
+        rows, cols, channels = np.shape(out)
+        out = out / 255
+        # import pdb; pdb.set_trace()
+        for i in range(1, rows-1):
+            for j in range(1, cols-1):
+                pixel = np.round(depth * out[i][j]) / depth
+                err = out[i][j] - pixel
+                out[i][j] = pixel
+                # error diffusion step
+                out[i    ][j + 1] = out[i    ][j + 1] + (0.5 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (0.5 * err)
+        out = np.clip(out, 0, 1)
+        out = (out*255).astype(np.uint8)
+        return(out[1:rows-1, 1:cols-1])
+
+    @staticmethod
+    def simple_colormap(image, colormap):
+        if image.ndim != 3 and image.shape[2] != 3:
+            raise RuntimeError(f"Image does not have the right dimensions.")
+        out = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
+        rows, cols, channels = np.shape(out)
+        out = out / 255
+        # import pdb; pdb.set_trace()
+        for i in range(1, rows-1):
+            for j in range(1, cols-1):
+                tile_ij = out[i, j, :]
+                dist = np.sum(np.square(np.subtract(tile_ij, colormap)), axis=1)
+                new_color_idx = np.argmin(dist)
+                if new_color_idx == 0:
+                    new_color_idx = 1
+                pixel = colormap[new_color_idx]
+                err = out[i][j] - pixel
+                out[i][j] = pixel
+                # error diffusion step
+                out[i    ][j + 1] = out[i    ][j + 1] + (0.5 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (0.5 * err)
+        out = np.clip(out, 0, 1)
+        out = (out*255).astype(np.uint8)
+        return(out[1:rows-1, 1:cols-1])
+
+
+
+
+
+
     @staticmethod
     def simple(image):
+        err_diff = np.array([[0, 0.5], [0.5, 0]])
         if image.ndim != 2:
             _image = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
-        _image = cv.copyMakeBorder(_image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
-        rows, cols = np.shape(_image)
-        out = cv.normalize(_image.astype('float'), None, 0.0, 1.0, cv.NORM_MINMAX)
+        out = cv.copyMakeBorder(_image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
+        rows, cols = np.shape(out)
+        out = out / 255
         for i in range(1, rows-1):
             for j in range(1, cols-1):
                 # threshold step
@@ -29,8 +107,10 @@ class Dither:
                     err = out[i][j]
                     out[i][j] = 0
                 # error diffusion step
-                out[i][j + 1] = out[i][j + 1] + (0.5 * err)
-                out[i + 1][j] = out[i + 1][j] + (0.5 * err)
+                # out[i:i+2, j:j+2] = out[i:i+2, j:j+2] + err_diff * err 
+                out[i    ][j + 1] = out[i    ][j + 1] + (0.5 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (0.5 * err)
+        out = np.clip(out, 0, 1)
         out = (out*255).astype(np.uint8)
         return(out[1:rows-1, 1:cols-1])
 
@@ -42,15 +122,16 @@ class Dither:
 
 
         """
-        tic = time.time()
-        err_diff = np.array([[0.0, 0.0, 7.0/16], [3.0/16, 5.0/16, 1.0/16]], dtype=np.float32)
+        err_diff = np.array([[0.0, 0.0, 7.0/16], [3.0/16, 5.0/16, 1.0/16]])
         if image.ndim != 2:
             out = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
         else:
             out = image.copy()
+        out = out / 255
         out = cv.copyMakeBorder(out, 1, 1, 1, 1, cv.BORDER_REPLICATE)
         rows, cols = np.shape(out)
-        out = cv.normalize(out.astype(np.float32), None, 0.0, 1.0, cv.NORM_MINMAX)
+        # out = cv.normalize(out.astype(np.float32), None, 0.0, 1.0, cv.NORM_MINMAX)
+        outid1 = id(out)
         for i in range(1, rows - 1):
             for j in range(1, cols - 1):
                 # threshold step
@@ -61,22 +142,23 @@ class Dither:
                     err = out[i][j]
                     out[i][j] = 0
                 # error diffusion step
-                out[i:i+2, j-1:j+2] = out[i:i+2, j-1:j+2] + err_diff * err
+                # out[i:i+2, j-1:j+2] = out[i:i+2, j-1:j+2] + err_diff * err
+                out[i    ][j + 1] = out[i    ][j + 1] + (Dither._7o16 * err)
+                out[i + 1][j - 1] = out[i + 1][j - 1] + (Dither._3o16 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (Dither._5o16 * err)
+                out[i + 1][j + 1] = out[i + 1][j + 1] + (Dither._1o16 * err)
+        out = np.clip(out, 0, 1)
         out = (out*255).astype(np.uint8)
-        toc = time.time()
-        log.debug(f"Chrono Floyd-Steinberg: {toc-tic:0.4f}s")
         return (out[1:rows - 1, 1:cols - 1])
-
-    @staticmethod
-    def floyd_steinberg
 
     @staticmethod
     def jarvis_judice_ninke(image):
         if image.ndim != 2:
             _image = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
-        _image = cv.copyMakeBorder(_image, 2, 2, 2, 2, cv.BORDER_REPLICATE)
-        rows, cols = np.shape(_image)
-        out = cv.normalize(_image.astype('float'), None, 0.0, 1.0, cv.NORM_MINMAX)
+        out = cv.copyMakeBorder(_image, 2, 2, 2, 2, cv.BORDER_REPLICATE)
+        rows, cols = np.shape(out)
+        # out = cv.normalize(_image.astype('float'), None, 0.0, 1.0, cv.NORM_MINMAX)
+        out = out / 255
         for i in range(2, rows - 2):
             for j in range(2, cols - 2):
                 # threshold step
@@ -87,18 +169,18 @@ class Dither:
                     err = out[i][j]
                     out[i][j] = 0
                 # error diffusion step
-                out[i][j + 1] = out[i][j + 1] + ((7 / 48) * err)
-                out[i][j + 2] = out[i][j + 2] + ((5 / 48) * err)
-                out[i + 1][j - 2] = out[i + 1][j - 2] + ((3 / 48) * err)
-                out[i + 1][j - 1] = out[i + 1][j - 1] + ((5 / 48) * err)
-                out[i + 1][j] = out[i + 1][j] + ((7 / 48) * err)
-                out[i + 1][j + 1] = out[i + 1][j + 1] + ((5 / 48) * err)
-                out[i + 1][j + 2] = out[i + 1][j + 2] + ((3 / 48) * err)
-                out[i + 2][j - 2] = out[i + 2][j - 2] + ((1 / 48) * err)
-                out[i + 2][j - 1] = out[i + 2][j - 1] + ((3 / 48) * err)
-                out[i + 2][j] = out[i + 2][j] + ((5 / 48) * err)
-                out[i + 2][j + 1] = out[i + 2][j + 1] + ((3 / 48) * err)
-                out[i + 2][j + 2] = out[i + 2][j + 2] + ((1 / 48) * err)
+                out[i    ][j + 1] = out[i    ][j + 1] + (Dither._7o48 * err)
+                out[i    ][j + 2] = out[i    ][j + 2] + (Dither._5o48 * err)
+                out[i + 1][j - 2] = out[i + 1][j - 2] + (Dither._3o48 * err)
+                out[i + 1][j - 1] = out[i + 1][j - 1] + (Dither._5o48 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (Dither._7o48 * err)
+                out[i + 1][j + 1] = out[i + 1][j + 1] + (Dither._5o48 * err)
+                out[i + 1][j + 2] = out[i + 1][j + 2] + (Dither._3o48 * err)
+                out[i + 2][j - 2] = out[i + 2][j - 2] + (Dither._1o48 * err)
+                out[i + 2][j - 1] = out[i + 2][j - 1] + (Dither._3o48 * err)
+                out[i + 2][j    ] = out[i + 2][j    ] + (Dither._5o48 * err)
+                out[i + 2][j + 1] = out[i + 2][j + 1] + (Dither._3o48 * err)
+                out[i + 2][j + 2] = out[i + 2][j + 2] + (Dither._1o48 * err)
         out = (out*255).astype(np.uint8)
         return (out[2:rows - 2, 2:cols - 2])
 

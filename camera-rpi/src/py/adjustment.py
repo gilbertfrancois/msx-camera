@@ -27,14 +27,30 @@ class Adjustment:
         return dst
 
     @staticmethod
-    def contrast_scurve(src:np.ndarray, value:float):
+    def contrast_scurve(src:np.ndarray, value:int):
+        """ Enhance contrast using an s-curve.
+
+        Parameters
+        ----------
+        src: np.ndarray
+            Input image
+        value: int
+            Amount of contrast [0, 100]
+        
+        Returns
+        -------
+        np.ndarray
+            Output image as type uint8
+        """
+        N = 5
+        a = 1 + N*(value / 100)
         dst = src.astype(np.float32)
         if np.max(dst) > 2:
             dst = dst / 255.0
         lidx = dst < 0.5
         uidx = dst >= 0.5
-        dst[lidx] = 0.5 * np.power(dst[lidx] / 0.5, value)
-        dst[uidx] = 1.0 - (0.5*np.power((1.0 - dst[uidx])/0.5, value))
+        dst[lidx] = 0.5 * np.power(dst[lidx] / 0.5, a)
+        dst[uidx] = 1.0 - (0.5*np.power((1.0 - dst[uidx])/0.5, a))
         dst = np.clip(dst, 0.0, 1.0)
         dst = (dst * 255).astype(np.uint8)
         return dst

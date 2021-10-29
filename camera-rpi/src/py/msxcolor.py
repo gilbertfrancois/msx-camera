@@ -5,11 +5,15 @@ from typing import Tuple, List
 from cartonify import Cartonifier
 import logging
 import time
+from dither import Dither
+from adjustment import Adjustment
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
+
 class MSXColor:
+
     def __init__(self):
         self.rgb_table = np.zeros((16, 1, 3), dtype=np.uint8)
         self.hsv_table = np.zeros((16, 1, 3), dtype=np.uint8)
@@ -25,10 +29,17 @@ class MSXColor:
                     "red", "red", "yellow", "yellow", "green", "magenta", "gray", "white"]
         self._init_color_tables()
 
-    def screen2(self, src, fg_style="simple", bg_style="hsv"):
-        src = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
-        fg = Dither.simple(src)
-        bg = self.map_hsv(src, s=[1.0, 1.0, 1.0])
+    def screen2(self, src, fg_style=4, bg_style="hsv", params={}):
+        if params.get("bg_scales"):
+            bg_scales = params.get("bg_scales")
+        else:
+            bg_scales = (1.0, 1.0, 1.0)
+        src_fg = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
+        src_fg = Adjustment.contrast_scurve(src_fg, params["fg_contrast"])
+        dst_fg = Dither.dither(src_fg, fg_style)
+        # dst_bg = self._map_hsv(src, bg_scales, True)
+        # frame = self._blend(dst_fg, dst_bg)
+        return dst_fg
         
     def _init_color_tables(self):
         rgb_color_list = []
@@ -44,12 +55,12 @@ class MSXColor:
         # Normalize the color tables:
         self.rgbf_table = (self.rgb_table / 255.0).astype(np.float32)
 
-        self.hsvf_table = self.to_hsvf(self.rgb_table)
-        self.hsvr_table = self.to_hsvr(self.rgb_table)
-        self.plot_vectors_3d(self.hsvr_table, None)
+        self.hsvf_table = self._to_hsvf(self.rgb_table)
+        self.hsvr_table = self._to_hsvr(self.rgb_table)
+        # self._plot_vectors_3d(self.hsvr_table, None)
         self.ycrcbf_table = (self.ycrcbf_table / 255.0).astype(np.float32)
 
-    def to_hsvf(self, image):
+    def _to_hsvf(self, image):
         """ RGB to HSV
 
         Returns
@@ -62,7 +73,7 @@ class MSXColor:
         dst = dst * np.array([[[2 * np.pi / 180, 1/255, 1/255]]])
         return dst
 
-    def to_hsvr(self, image):
+    def _to_hsvr(self, image):
         """ RGB to HSV (radians float)
 
         Returns
@@ -71,48 +82,20 @@ class MSXColor:
             [sat * cos(hue), sat * sin(hue), value]
         """
         s = 1
-        dst = self.to_hsvf(image)
+        dst = self._to_hsvf(image)
         x = s * dst[:, :, 1] * np.cos(dst[:, :, 0])
         y = s * dst[:, :, 1] * np.sin(dst[:, :, 0])
         dst[:, :, 0] = x
         dst[:, :, 1] = y
         return dst
 
-    def colormap():
-        for hue in range(360):
-            for value in range(255, 0):
-                pass
-
-        
-    def plot_vectors(self, cmap, pixel_hsvr):
-        head_width = np.max(cmap)*.05
-        plt.figure()
-        for index, pixel in enumerate(cmap):
-            plt.arrow(0, 0, pixel[0,0], pixel[0,1], color=f"#{self.hex_color_list[index]}", head_width=head_width, head_length=head_width)
-        if pixel_hsvr is not None:
-            plt.arrow(0, 0, pixel_hsvr[0,0], pixel_hsvr[0,1], color=f"black", head_width=head_width, head_length=head_width)
-        plt.show()
-
-    def plot_vectors_3d(self, cmap, pixel_hsvr):
-        head_width = np.max(cmap)*.05
-        plt.figure()
-        ax = plt.gca(projection="3d")
-        zero = np.zeros_like(cmap[:,0,0])
-        color_list = [f"#{c}" for c in self.hex_color_list]
-        ax.quiver(zero, zero, zero, cmap[:, 0, 0], cmap[:, 0, 1], cmap[:, 0, 2], color=color_list)
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
-        ax.set_zlim(0, 1)
-        plt.show()
-
-
-    def map_hsv(self, image:np.ndarray, scales:Tuple[float, float, float], black2gray=True):
+    def _map_hsv(self, image:np.ndarray, scales:Tuple[float, float, float], black2gray=True):
         # import pdb; pdb.set_trace()
         _scales = np.array([[scales]]).astype(np.float32)
         assert _scales.ndim == 3
         tiles = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
         rows, cols = tiles.shape[:2]
-        tiles_hsv = self.to_hsvr(tiles) * _scales
+        tiles_hsv = self._to_hsvr(tiles) 
         _hsvr_table = self.hsvr_table * _scales
         _hsvr_table = _hsvr_table.reshape(16, 3)
         tiles_new = np.zeros_like(tiles_hsv)
@@ -132,59 +115,56 @@ class MSXColor:
         tiles_new = cv.resize(tiles_new, (256, 192), interpolation=cv.INTER_NEAREST)
         return tiles_new.astype(np.uint8)
 
-    def map_ycrcb(self, image, s):
-        # import pdb; pdb.set_trace()
-        tiles = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
-        tiles = (tiles / 255.0).astype(np.float32)
-        rows, cols = tiles.shape[:2]
-        tiles_ycrcb = cv.cvtColor(tiles, cv.COLOR_RGB2YCrCb).astype(np.float32)
-        ycrcb_color_mat = self.ycrcb_color_mat.copy()
-        for i, _s in enumerate(s):
-            tiles_ycrcb[:, :, i] = tiles_ycrcb[:, :, i] * _s
-            ycrcb_color_mat[:, i] = ycrcb_color_mat[:, i] * _s
-        tiles_new = np.zeros_like(tiles_ycrcb)
-        for i in range(rows):
-            for j in range(cols):
-                tile_ij = tiles_ycrcb[i, j, :]
-                dist = np.sum(np.square(np.subtract(tile_ij, ycrcb_color_mat)), axis=1)
-                new_color_idx = np.argmin(dist)
-                if new_color_idx == 0 or new_color_idx == 1:
-                    new_color_idx = 14
-                new_color = self.rgb_color_mat[new_color_idx]
-                tiles_new[i, j, :] = new_color
-        # self.plot(tiles, tiles_new.astype(np.uint8))
-        return tiles_new.astype(np.uint8)
+    # def _map_ycrcb(self, image, s):
+    #     # import pdb; pdb.set_trace()
+    #     tiles = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
+    #     tiles = (tiles / 255.0).astype(np.float32)
+    #     rows, cols = tiles.shape[:2]
+    #     tiles_ycrcb = cv.cvtColor(tiles, cv.COLOR_RGB2YCrCb).astype(np.float32)
+    #     ycrcb_color_mat = self.ycrcb_color_mat.copy()
+    #     for i, _s in enumerate(s):
+    #         tiles_ycrcb[:, :, i] = tiles_ycrcb[:, :, i] * _s
+    #         ycrcb_color_mat[:, i] = ycrcb_color_mat[:, i] * _s
+    #     tiles_new = np.zeros_like(tiles_ycrcb)
+    #     for i in range(rows):
+    #         for j in range(cols):
+    #             tile_ij = tiles_ycrcb[i, j, :]
+    #             dist = np.sum(np.square(np.subtract(tile_ij, ycrcb_color_mat)), axis=1)
+    #             new_color_idx = np.argmin(dist)
+    #             if new_color_idx == 0 or new_color_idx == 1:
+    #                 new_color_idx = 14
+    #             new_color = self.rgb_color_mat[new_color_idx]
+    #             tiles_new[i, j, :] = new_color
+    #     # self.plot(tiles, tiles_new.astype(np.uint8))
+    #     return tiles_new.astype(np.uint8)
 
-    def map_rgb(self, image):
-        tiles = cv.resize(image, (32, 24), interpolation=cv.INTER_LINEAR).astype(np.float32)
-        rows, cols = tiles.shape[:2]
-        tiles_new = np.zeros_like(tiles)
-        # import pdb; pdb.set_trace()
-        for i in range(rows):
-            for j in range(cols):
-                tile_ij = tiles[i, j].reshape(1, -1)
-                dist = np.sum(np.square(np.subtract(tile_ij, self.rgb_color_mat)), axis=1)
-                new_color_idx = np.argmin(dist)
-                if new_color_idx == 0 or new_color_idx == 1:
-                    new_color_idx = 14
-                new_color = self.rgb_color_mat[new_color_idx]
-                tiles_new[i, j, :] = new_color
-        # self.plot(tiles, tiles_new.astype(np.uint8))
-        return tiles_new.astype(np.uint8)
+    # def _map_rgb(self, image):
+    #     tiles = cv.resize(image, (32, 24), interpolation=cv.INTER_LINEAR).astype(np.float32)
+    #     rows, cols = tiles.shape[:2]
+    #     tiles_new = np.zeros_like(tiles)
+    #     # import pdb; pdb.set_trace()
+    #     for i in range(rows):
+    #         for j in range(cols):
+    #             tile_ij = tiles[i, j].reshape(1, -1)
+    #             dist = np.sum(np.square(np.subtract(tile_ij, self.rgb_color_mat)), axis=1)
+    #             new_color_idx = np.argmin(dist)
+    #             if new_color_idx == 0 or new_color_idx == 1:
+    #                 new_color_idx = 14
+    #             new_color = self.rgb_color_mat[new_color_idx]
+    #             tiles_new[i, j, :] = new_color
+    #     # self.plot(tiles, tiles_new.astype(np.uint8))
+    #     return tiles_new.astype(np.uint8)
 
-    def blend(self, fg, bg):
+    def _blend(self, fg, bg):
         if fg.ndim != 3:
             fg = cv.cvtColor(fg, cv.COLOR_GRAY2RGB)
         fg = fg.astype(np.uint8)
         bg = bg.astype(np.uint8)
         dst = cv.bitwise_and(fg, bg)
-        # fg = fg.astype(np.float32)
-        # bg = bg.astype(np.float32)
-        # fg = 255 - fg
         dst = np.clip(dst, 0, 255)
         return dst
 
-    def plot2(self, img1, img2):
+    def _plot2(self, img1, img2):
         fig, axs = plt.subplots(1, 2, figsize=(12, 8))
         if img1.ndim != 3:
             axs[0].imshow(img1, cmap="gray")
@@ -193,7 +173,7 @@ class MSXColor:
         axs[1].imshow(img2)
         plt.show()
 
-    def plot3(self, img1, img2, img3, img4):
+    def _plot3(self, img1, img2, img3, img4):
         fig, axs = plt.subplots(2, 2)
         axs[0][0].imshow(img1)
         axs[1][0].imshow(img2, cmap="gray")
@@ -201,3 +181,24 @@ class MSXColor:
         axs[1][1].imshow(img4)
         plt.show()
 
+    def _plot_vectors_2d(self, cmap, pixel_hsvr):
+        head_width = np.max(cmap)*.05
+        plt.figure()
+        for index, pixel in enumerate(cmap):
+            plt.arrow(0, 0, pixel[0,0], pixel[0,1], color=f"#{self.hex_color_list[index]}", head_width=head_width, head_length=head_width)
+        if pixel_hsvr is not None:
+            plt.arrow(0, 0, pixel_hsvr[0,0], pixel_hsvr[0,1], color=f"black", head_width=head_width, head_length=head_width)
+        plt.show()
+
+    def _plot_vectors_3d(self, cmap, pixel_hsvr=None):
+        head_width = np.max(cmap)*.05
+        plt.figure()
+        ax = plt.gca(projection="3d")
+        zero = np.zeros_like(cmap[:,0,0])
+        color_list = [f"#{c}" for c in self.hex_color_list]
+        for i in range(cmap.shape[0]):
+            ax.quiver(zero, zero, zero, cmap[i, 0, 0], cmap[i, 0, 1], cmap[i, 0, 2], color=color_list[i])
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(0, 1)
+        plt.show()

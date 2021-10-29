@@ -1,0 +1,69 @@
+<CamView>
+
+    AnchorLayout:
+        anchor_x: 'left'
+        anchor_y: 'top'
+        width: root.width - (root.height * 4 / 3)
+        height: root.height
+        BoxLayout:
+            id: toolbox
+            width: root.width - (root.height * 4 / 3)
+            height: root.height
+            size_hint: None, 1.0
+            orientation: 'vertical'
+            padding: 2
+
+            Slider:
+                id: fg_contrast
+                min: 0
+                max: 100
+                value: 0 
+
+            Slider:
+                id: hue
+                min: 0
+                max: 200
+                value: 100 
+
+            Slider:
+                id: sat
+                min: 0
+                max: 200
+                value: 100 
+
+            Slider:
+                id: lum
+                min: 0
+                max: 200
+                value: 100 
+
+            Button:
+                text: "Style 1"
+                id: button_style3
+                on_press: root.button_style_1_pressed()
+            Button:
+                text: "Style 2"
+                id: button_style3
+                on_press: root.button_style_2_pressed()
+            Button:
+                text: "Style 3"
+                id: button_style3
+                on_press: root.button_style_3_pressed()
+            Camera:
+                id: camera
+                resolution: (640, 480)
+                allow_stretch: True
+                play: True
+
+                
+    AnchorLayout:
+        anchor_x: 'right'
+        anchor_y: 'top'
+        Image:
+            id: processed_frame
+            size_hint: None, 1.0
+            width: 4*root.width / 5
+            height: root.height
+            allow_stretch: True
+            source: "assets/images/testbeeld.png"
+
