@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, List
 
+def rgbi2rgbf(image: np.ndarray) -> np.ndarray:
+    return image / 255.0
+
+
 def rgbi2hsvi(image: np.ndarray) -> np.ndarray:
     """ RGB to HSV in (theta, r, z) coordinates.
 
@@ -58,8 +62,19 @@ def rgbi2hsvf_xy(image: np.ndarray) -> np.ndarray:
     y = dst[:, :, 1] * np.sin(dst[:, :, 0])
     dst[:, :, 0] = x
     dst[:, :, 1] = y
+    dst[:, :, 2] = 2*dst[:, :, 2] - 1
     return dst
 
+def rgbi2labf(image: np.ndarray) -> np.ndarray:
+    dst = cv.cvtColor(image, cv.COLOR_RGB2LAB)
+    dst = dst / 255
+    # dst = 2*dst - 1
+    _dst = np.zeros_like(dst)
+    _dst[:, :, 0] = 2*dst[:, :, 1] - 1
+    _dst[:, :, 1] = 2*dst[:, :, 2] - 1
+    _dst[:, :, 2] = 2*dst[:, :, 0] - 1
+    return _dst
+    
 
 def l2_dist(v, A):
     """ Euclidian distance function.

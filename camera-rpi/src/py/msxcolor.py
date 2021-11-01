@@ -15,12 +15,12 @@ class MSXColor:
     PALETTE_MSX1_SHAPE = (16, 3)
 
     def __init__(self):
-        self.rgbi_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
-        self.hsvi_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
-        self.ycrcb_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
-        self.rgbf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
-        self.hsvf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
-        self.ycrcbf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.palette_msx1_rgbi = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
+        self.palette_msx1_hsvi = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
+        self.palette_msx1_rgbf = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.palette_msx1_hsvf  = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.palette_msx1_hsvf_xy  = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.palette_msx1_labf = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
         self.hex_color_list = ["#000000", "#010101", "#3eb849", "#74d07d", "#5955e0", "#8076f1", "#b95e51", "#65dbef", 
                                "#db6559", "#ff897d", "#ccc35e", "#ded087", "#3aa241", "#b766b5", "#cccccc", "#ffffff"]
         self.name_color_list = ["transparant", "black", "green2", "green3", "blue1", "blue2", "red1", "cyan",
@@ -30,13 +30,15 @@ class MSXColor:
     def screen2(self, src, fg_style=1, bg_style="hsv", params={}):
         src = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
         # frame = self.style1(src, params)
-        frame = self.style2(src, params)
+        frame = self.style2(src, params, self.palette_msx1_labf, ct.rgbi2labf)
         return frame
 
     def style1(self, frame_rgbi, params={}):
         fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
         fg = Dither.dither(fg, Dither.FLOYD_STEINBERG)
-        bg = self.bg_map(frame_rgbi, params, True)
+        # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_labf, ct.rgbi2labf, True)
+        #b bg = self.bg_map(frame_rgbi, params, self.palette_msx1_rgbf, ct.rgbi2rgbf, True)
+        bg = self.bg_map(frame_rgbi, params, self.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy, True)
         frame = self._blend(fg, bg)
         return frame
 
@@ -48,57 +50,76 @@ class MSXColor:
             g = int(hex_color[2:4], 16)
             b = int(hex_color[4:6], 16)
             rgb_color_list.append([r, g, b])
-        self.rgbi_table = np.vstack(rgb_color_list).astype(np.uint8)
-        self.rgbf_table = self.rgbi_table / 255.0
-        self.hsvi_table = ct.rgbi2hsvi(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
-        self.hsvf_table = ct.rgbi2hsvf(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
-        self.hsvf_xy_table = ct.rgbi2hsvf_xy(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
-        # self._plot_vectors_3d(self.hsvf_xy_table, self.hex_color_list)
+        self.palette_msx1_rgbi = np.vstack(rgb_color_list).astype(np.uint8)
+        self.palette_msx1_rgbf = ct.rgbi2rgbf(self.palette_msx1_rgbi.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.palette_msx1_hsvi = ct.rgbi2hsvi(self.palette_msx1_rgbi.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.palette_msx1_hsvf  = ct.rgbi2hsvf(self.palette_msx1_rgbi.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.palette_msx1_hsvf_xy = ct.rgbi2hsvf_xy(self.palette_msx1_rgbi.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.palette_msx1_labf = ct.rgbi2labf(self.palette_msx1_rgbi.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        # self._plot_vectors_3d(self.palette_msx1_hsvf_xy, self.hex_color_list)
+        # self._plot_vectors_3d(self.palette_msx1_labf, self.hex_color_list)
 
-    def style2(self, frame_rgbi, params={}):
+    def style2(self, frame_rgbi: np.ndarray, params: Dict, palette: np.ndarray, cvt_fn) -> np.ndarray:
         scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
         scales = np.array([scales]).astype(np.float64)
         if params.get("contrast") is not None and params.get("contrast") > 0:
             frame_rgbi = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
         rows, cols = frame_rgbi.shape[:2]
-        frame_hsvf_xy = ct.rgbi2hsvf_xy(frame_rgbi) 
-        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
-        frame_rgbi = Dither.simple_colormap(frame_hsvf_xy, hsvf_xy_table_scaled, self.rgbi_table)
+        frame_cvt = cvt_fn(frame_rgbi) 
+        palette_scaled = palette * scales
+        frame_rgbi = Dither.simple_colormap(frame_cvt, palette_scaled, self.palette_msx1_rgbi)
         return frame_rgbi
 
-    def fg_map(self, image:np.ndarray, params: Dict):
+    def fg_map(self, image:np.ndarray, params: Dict, palette: np.ndarray, cvt_fn) -> np.ndarray:
         scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
         scales = np.array([scales]).astype(np.float64)
         frame_rgbi = image
         rows, cols = frame_rgbi.shape[:2]
-        bg_colors_hsvf_xy = ct.rgbi2hsvf_xy(frame_rgbi) 
-        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
+        frame_cvt = cvt_fn(frame_rgbi) 
+        palette_scaled = palette * scales
         for i in range(rows):
             for j in range(cols):
-                idx, _ = ct.l2_dist(bg_colors_hsvf_xy[i, j, :], hsvf_xy_table_scaled)
+                idx, _ = ct.l2_dist(frame_cvt[i, j, :], palette_scaled)
                 new_color_idx = idx[0]
                 if new_color_idx == 0:
                     new_color_idx = 1
-                frame_rgbi[i, j, :] = self.rgbi_table[new_color_idx]
+                frame_rgbi[i, j, :] = self.palette_msx1_rgbi[new_color_idx]
+        return frame_rgbi.astype(np.uint8)
+
+    def fg_map_cielab(self, image:np.ndarray, params: Dict):
+        scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
+        scales = np.array([scales]).astype(np.float64)
+        frame_rgbi = image
+        rows, cols = frame_rgbi.shape[:2]
+        frame_cvt = ct.rgbi2hsvf_xy(frame_rgbi) 
+        table_cvt = self.palette_msx1_hsvf_xy * scales
+        for i in range(rows):
+            for j in range(cols):
+                idx, _ = ct.l2_dist(frame_cvt[i, j, :], table_cvt)
+                new_color_idx = idx[0]
+                if new_color_idx == 0:
+                    new_color_idx = 1
+                frame_rgbi[i, j, :] = self.palette_msx1_rgbi[new_color_idx]
         return frame_rgbi.astype(np.uint8)
 
 
-    def bg_map(self, image:np.ndarray, params: Dict, black2gray=True):
+
+    def bg_map(self, image:np.ndarray, params: Dict, palette, cvt_fn, black2gray=True):
         scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
         scales = np.array([scales]).astype(np.float64)
         bg_colors_rgbi = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
         rows, cols = bg_colors_rgbi.shape[:2]
-        bg_colors_hsvf_xy = ct.rgbi2hsvf_xy(bg_colors_rgbi) 
-        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
+        bg_colors_cvt = cvt_fn(bg_colors_rgbi) 
+        palette_scaled = palette * scales
         for i in range(rows):
             for j in range(cols):
-                idx, _ = ct.l2_dist(bg_colors_hsvf_xy[i, j, :], hsvf_xy_table_scaled)
+                idx, _ = ct.l2_dist(bg_colors_cvt[i, j, :], palette_scaled)
                 new_color_idx = idx[0]
                 if new_color_idx == 0:
                     new_color_idx = 1
                 if new_color_idx == 1 and black2gray:
                     new_color_idx = 14
-                bg_colors_rgbi[i, j, :] = self.rgbi_table[new_color_idx]
+                bg_colors_rgbi[i, j, :] = self.palette_msx1_rgbi[new_color_idx]
         bg_colors_rgbi = cv.resize(bg_colors_rgbi, (256, 192), interpolation=cv.INTER_NEAREST)
         return bg_colors_rgbi.astype(np.uint8)
 
@@ -153,12 +174,14 @@ class MSXColor:
 if __name__ == "__main__":
     msx_color = MSXColor()
     # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
-    src = cv.imread("pic9.jpg")
+    src = cv.imread("pic1.jpg")
     src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
     src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
-    dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
-    dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
-    dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
+    dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
+    dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
+    dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
+    # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
+    # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
     msx_color._plot3(src, dst, dst2, dst3)
 
 
