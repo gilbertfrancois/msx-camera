@@ -1,159 +1,106 @@
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Tuple, List
-from cartonify import Cartonifier
+from typing import Tuple, List, Dict
 import logging
-import time
 from dither import Dither
 from adjustment import Adjustment
+import color_transform as ct
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 
 class MSXColor:
+    PALETTE_MSX1_SHAPE = (16, 3)
 
     def __init__(self):
-        self.rgb_table = np.zeros((16, 1, 3), dtype=np.uint8)
-        self.hsv_table = np.zeros((16, 1, 3), dtype=np.uint8)
-        self.ycrcb_table = np.zeros((16, 1, 3), dtype=np.uint8)
-        self.rgbf_table = np.zeros((16, 1, 3), dtype=np.float32)
-        self.hsvf_table = np.zeros((16, 1, 3), dtype=np.float32)
-        self.ycrcbf_table = np.zeros((16, 1, 3), dtype=np.float32)
-        self.hex_color_list = ["000000", "010101", "3eb849", "74d07d", "5955e0", "8076f1", "b95e51", "65dbef", 
-                          "db6559", "ff897d", "ccc35e", "ded087", "3aa241", "b766b5", "cccccc", "ffffff"]
+        self.rgbi_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
+        self.hsvi_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
+        self.ycrcb_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.uint8)
+        self.rgbf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.hsvf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.ycrcbf_table = np.zeros(MSXColor.PALETTE_MSX1_SHAPE, dtype=np.float64)
+        self.hex_color_list = ["#000000", "#010101", "#3eb849", "#74d07d", "#5955e0", "#8076f1", "#b95e51", "#65dbef", 
+                               "#db6559", "#ff897d", "#ccc35e", "#ded087", "#3aa241", "#b766b5", "#cccccc", "#ffffff"]
         self.name_color_list = ["transparant", "black", "green2", "green3", "blue1", "blue2", "red1", "cyan",
-                           "red2", "red3", "yellow1", "yellow2", "green1", "magenta", "gray", "white"]
-        self.mpl_cmap = ["black", "black", "green", "green", "blue", "blue", "red", "cyan",
-                    "red", "red", "yellow", "yellow", "green", "magenta", "gray", "white"]
+                                "red2", "red3", "yellow1", "yellow2", "green1", "magenta", "gray", "white"]
         self._init_color_tables()
 
-    def screen2(self, src, fg_style=4, bg_style="hsv", params={}):
-        if params.get("bg_scales"):
-            bg_scales = params.get("bg_scales")
-        else:
-            bg_scales = (1.0, 1.0, 1.0)
-        src_fg = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
-        src_fg = Adjustment.contrast_scurve(src_fg, params["fg_contrast"])
-        dst_fg = Dither.dither(src_fg, fg_style)
-        # dst_bg = self._map_hsv(src, bg_scales, True)
-        # frame = self._blend(dst_fg, dst_bg)
-        return dst_fg
-        
+    def screen2(self, src, fg_style=1, bg_style="hsv", params={}):
+        src = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
+        # frame = self.style1(src, params)
+        frame = self.style2(src, params)
+        return frame
+
+    def style1(self, frame_rgbi, params={}):
+        fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
+        fg = Dither.dither(fg, Dither.FLOYD_STEINBERG)
+        bg = self.bg_map(frame_rgbi, params, True)
+        frame = self._blend(fg, bg)
+        return frame
+
     def _init_color_tables(self):
         rgb_color_list = []
         for index, hex_color in enumerate(self.hex_color_list):
+            hex_color = hex_color.replace("#", "")
             r = int(hex_color[0:2], 16)
             g = int(hex_color[2:4], 16)
             b = int(hex_color[4:6], 16)
             rgb_color_list.append([r, g, b])
-        # import pdb; pdb.set_trace()
-        self.rgb_table = np.vstack(rgb_color_list).reshape(-1, 1, 3).astype(np.uint8)
-        self.hsv_table = cv.cvtColor(self.rgb_table, cv.COLOR_RGB2HSV).astype(np.uint8)
-        self.ycrcb_table = cv.cvtColor(self.rgb_table, cv.COLOR_RGB2YCrCb).astype(np.uint8)
-        # Normalize the color tables:
-        self.rgbf_table = (self.rgb_table / 255.0).astype(np.float32)
+        self.rgbi_table = np.vstack(rgb_color_list).astype(np.uint8)
+        self.rgbf_table = self.rgbi_table / 255.0
+        self.hsvi_table = ct.rgbi2hsvi(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.hsvf_table = ct.rgbi2hsvf(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        self.hsvf_xy_table = ct.rgbi2hsvf_xy(self.rgbi_table.reshape(-1, 1, 3)).reshape(MSXColor.PALETTE_MSX1_SHAPE)
+        # self._plot_vectors_3d(self.hsvf_xy_table, self.hex_color_list)
 
-        self.hsvf_table = self._to_hsvf(self.rgb_table)
-        self.hsvr_table = self._to_hsvr(self.rgb_table)
-        # self._plot_vectors_3d(self.hsvr_table, None)
-        self.ycrcbf_table = (self.ycrcbf_table / 255.0).astype(np.float32)
+    def style2(self, frame_rgbi, params={}):
+        scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
+        scales = np.array([scales]).astype(np.float64)
+        if params.get("contrast") is not None and params.get("contrast") > 0:
+            frame_rgbi = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
+        rows, cols = frame_rgbi.shape[:2]
+        frame_hsvf_xy = ct.rgbi2hsvf_xy(frame_rgbi) 
+        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
+        frame_rgbi = Dither.simple_colormap(frame_hsvf_xy, hsvf_xy_table_scaled, self.rgbi_table)
+        return frame_rgbi
 
-    def _to_hsvf(self, image):
-        """ RGB to HSV
-
-        Returns
-        -------
-        np.array
-            hue in [0, 2Pi], sat in [0,1], value in [0,1]
-        """
-        dst = cv.cvtColor(image, cv.COLOR_RGB2HSV)
-        dst = dst.astype(np.float32)
-        dst = dst * np.array([[[2 * np.pi / 180, 1/255, 1/255]]])
-        return dst
-
-    def _to_hsvr(self, image):
-        """ RGB to HSV (radians float)
-
-        Returns
-        -------
-        np.array
-            [sat * cos(hue), sat * sin(hue), value]
-        """
-        s = 1
-        dst = self._to_hsvf(image)
-        x = s * dst[:, :, 1] * np.cos(dst[:, :, 0])
-        y = s * dst[:, :, 1] * np.sin(dst[:, :, 0])
-        dst[:, :, 0] = x
-        dst[:, :, 1] = y
-        return dst
-
-    def _map_hsv(self, image:np.ndarray, scales:Tuple[float, float, float], black2gray=True):
-        # import pdb; pdb.set_trace()
-        _scales = np.array([[scales]]).astype(np.float32)
-        assert _scales.ndim == 3
-        tiles = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
-        rows, cols = tiles.shape[:2]
-        tiles_hsv = self._to_hsvr(tiles) 
-        _hsvr_table = self.hsvr_table * _scales
-        _hsvr_table = _hsvr_table.reshape(16, 3)
-        tiles_new = np.zeros_like(tiles_hsv)
-        # import pdb; pdb.set_trace()
+    def fg_map(self, image:np.ndarray, params: Dict):
+        scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
+        scales = np.array([scales]).astype(np.float64)
+        frame_rgbi = image
+        rows, cols = frame_rgbi.shape[:2]
+        bg_colors_hsvf_xy = ct.rgbi2hsvf_xy(frame_rgbi) 
+        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
         for i in range(rows):
             for j in range(cols):
-                tile_ij = tiles_hsv[i, j, :]
-                dist = np.sum(np.square(np.subtract(tile_ij, _hsvr_table)), axis=1)
-                new_color_idx = np.argmin(dist)
+                idx, _ = ct.l2_dist(bg_colors_hsvf_xy[i, j, :], hsvf_xy_table_scaled)
+                new_color_idx = idx[0]
+                if new_color_idx == 0:
+                    new_color_idx = 1
+                frame_rgbi[i, j, :] = self.rgbi_table[new_color_idx]
+        return frame_rgbi.astype(np.uint8)
+
+
+    def bg_map(self, image:np.ndarray, params: Dict, black2gray=True):
+        scales = (params.get("hue", 1.0), params.get("sat", 1.0), params.get("lum", 1.0))
+        scales = np.array([scales]).astype(np.float64)
+        bg_colors_rgbi = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
+        rows, cols = bg_colors_rgbi.shape[:2]
+        bg_colors_hsvf_xy = ct.rgbi2hsvf_xy(bg_colors_rgbi) 
+        hsvf_xy_table_scaled = self.hsvf_xy_table * scales
+        for i in range(rows):
+            for j in range(cols):
+                idx, _ = ct.l2_dist(bg_colors_hsvf_xy[i, j, :], hsvf_xy_table_scaled)
+                new_color_idx = idx[0]
                 if new_color_idx == 0:
                     new_color_idx = 1
                 if new_color_idx == 1 and black2gray:
                     new_color_idx = 14
-                new_color = self.rgb_table[new_color_idx]
-                tiles_new[i, j, :] = new_color
-        # self.plot(tiles, tiles_new.astype(np.uint8))
-        tiles_new = cv.resize(tiles_new, (256, 192), interpolation=cv.INTER_NEAREST)
-        return tiles_new.astype(np.uint8)
-
-    # def _map_ycrcb(self, image, s):
-    #     # import pdb; pdb.set_trace()
-    #     tiles = cv.resize(image, (32, 192), interpolation=cv.INTER_LINEAR)
-    #     tiles = (tiles / 255.0).astype(np.float32)
-    #     rows, cols = tiles.shape[:2]
-    #     tiles_ycrcb = cv.cvtColor(tiles, cv.COLOR_RGB2YCrCb).astype(np.float32)
-    #     ycrcb_color_mat = self.ycrcb_color_mat.copy()
-    #     for i, _s in enumerate(s):
-    #         tiles_ycrcb[:, :, i] = tiles_ycrcb[:, :, i] * _s
-    #         ycrcb_color_mat[:, i] = ycrcb_color_mat[:, i] * _s
-    #     tiles_new = np.zeros_like(tiles_ycrcb)
-    #     for i in range(rows):
-    #         for j in range(cols):
-    #             tile_ij = tiles_ycrcb[i, j, :]
-    #             dist = np.sum(np.square(np.subtract(tile_ij, ycrcb_color_mat)), axis=1)
-    #             new_color_idx = np.argmin(dist)
-    #             if new_color_idx == 0 or new_color_idx == 1:
-    #                 new_color_idx = 14
-    #             new_color = self.rgb_color_mat[new_color_idx]
-    #             tiles_new[i, j, :] = new_color
-    #     # self.plot(tiles, tiles_new.astype(np.uint8))
-    #     return tiles_new.astype(np.uint8)
-
-    # def _map_rgb(self, image):
-    #     tiles = cv.resize(image, (32, 24), interpolation=cv.INTER_LINEAR).astype(np.float32)
-    #     rows, cols = tiles.shape[:2]
-    #     tiles_new = np.zeros_like(tiles)
-    #     # import pdb; pdb.set_trace()
-    #     for i in range(rows):
-    #         for j in range(cols):
-    #             tile_ij = tiles[i, j].reshape(1, -1)
-    #             dist = np.sum(np.square(np.subtract(tile_ij, self.rgb_color_mat)), axis=1)
-    #             new_color_idx = np.argmin(dist)
-    #             if new_color_idx == 0 or new_color_idx == 1:
-    #                 new_color_idx = 14
-    #             new_color = self.rgb_color_mat[new_color_idx]
-    #             tiles_new[i, j, :] = new_color
-    #     # self.plot(tiles, tiles_new.astype(np.uint8))
-    #     return tiles_new.astype(np.uint8)
+                bg_colors_rgbi[i, j, :] = self.rgbi_table[new_color_idx]
+        bg_colors_rgbi = cv.resize(bg_colors_rgbi, (256, 192), interpolation=cv.INTER_NEAREST)
+        return bg_colors_rgbi.astype(np.uint8)
 
     def _blend(self, fg, bg):
         if fg.ndim != 3:
@@ -176,7 +123,7 @@ class MSXColor:
     def _plot3(self, img1, img2, img3, img4):
         fig, axs = plt.subplots(2, 2)
         axs[0][0].imshow(img1)
-        axs[1][0].imshow(img2, cmap="gray")
+        axs[1][0].imshow(img2)
         axs[0][1].imshow(img3)
         axs[1][1].imshow(img4)
         plt.show()
@@ -190,15 +137,28 @@ class MSXColor:
             plt.arrow(0, 0, pixel_hsvr[0,0], pixel_hsvr[0,1], color=f"black", head_width=head_width, head_length=head_width)
         plt.show()
 
-    def _plot_vectors_3d(self, cmap, pixel_hsvr=None):
-        head_width = np.max(cmap)*.05
+    def _plot_vectors_3d(self, vectors: np.ndarray, color_list: List[str]):
+        head_width = np.max(vectors)*.05
         plt.figure()
         ax = plt.gca(projection="3d")
-        zero = np.zeros_like(cmap[:,0,0])
-        color_list = [f"#{c}" for c in self.hex_color_list]
-        for i in range(cmap.shape[0]):
-            ax.quiver(zero, zero, zero, cmap[i, 0, 0], cmap[i, 0, 1], cmap[i, 0, 2], color=color_list[i])
+        # zero = np.zeros_like(cmap[: , 0])
+        zero = 0
+        for i in range(vectors.shape[0]):
+            ax.quiver(zero, zero, zero, vectors[i, 0], vectors[i, 1], vectors[i, 2], color=color_list[i])
         ax.set_xlim(-1, 1)
         ax.set_ylim(-1, 1)
         ax.set_zlim(0, 1)
         plt.show()
+
+if __name__ == "__main__":
+    msx_color = MSXColor()
+    # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
+    src = cv.imread("pic9.jpg")
+    src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
+    src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
+    dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
+    dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
+    dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
+    msx_color._plot3(src, dst, dst2, dst3)
+
+

@@ -24,5 +24,7 @@ This project is an exploration for building a digital camera for MSX(1), a vinta
 
 [Conversor TTL-RS232 (Spanish)](http://hotbit.blogspot.com/2008/01/conversor-ttl-rs232.html)
 
+[RS-232 vs. TTL Serial Communication](https://www.sparkfun.com/tutorials/215)
+
 [LPRINT to Joystick port](http://hotbit.blogspot.com/2008/01/lprint-na-porta-de-joystick.html)
 

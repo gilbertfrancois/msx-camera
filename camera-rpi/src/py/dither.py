@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple, List
 import logging
 import time
+import color_transform as ct
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -60,34 +61,30 @@ class Dither:
         return(out[1:rows-1, 1:cols-1])
 
     @staticmethod
-    def simple_colormap(image, colormap):
+    def simple_colormap(image, src_colormap, dst_colormap):
         if image.ndim != 3 and image.shape[2] != 3:
             raise RuntimeError(f"Image does not have the right dimensions.")
         out = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
-        rows, cols, channels = np.shape(out)
-        out = out / 255
+        if dst_colormap is not None:
+            dst = np.zeros_like(out, dtype=np.uint8)
+        else:
+            dst = out
+        rows, cols, _ = out.shape
         # import pdb; pdb.set_trace()
         for i in range(1, rows-1):
             for j in range(1, cols-1):
-                tile_ij = out[i, j, :]
-                dist = np.sum(np.square(np.subtract(tile_ij, colormap)), axis=1)
-                new_color_idx = np.argmin(dist)
+                idx, _ = ct.l2_dist(out[i, j, :], src_colormap)
+                new_color_idx = idx[0]
                 if new_color_idx == 0:
                     new_color_idx = 1
-                pixel = colormap[new_color_idx]
-                err = out[i][j] - pixel
-                out[i][j] = pixel
+                new_color_ij = src_colormap[new_color_idx]
+                err = out[i][j] - new_color_ij
+                out[i][j] = new_color_ij
+                dst[i][j] = dst_colormap[new_color_idx]
                 # error diffusion step
                 out[i    ][j + 1] = out[i    ][j + 1] + (0.5 * err)
                 out[i + 1][j    ] = out[i + 1][j    ] + (0.5 * err)
-        out = np.clip(out, 0, 1)
-        out = (out*255).astype(np.uint8)
-        return(out[1:rows-1, 1:cols-1])
-
-
-
-
-
+        return(dst[1:rows-1, 1:cols-1])
 
     @staticmethod
     def simple(image):
