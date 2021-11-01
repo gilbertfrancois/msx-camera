@@ -61,11 +61,11 @@ class Dither:
         return(out[1:rows-1, 1:cols-1])
 
     @staticmethod
-    def simple_colormap(image, src_colormap, dst_colormap):
+    def simple_colormap(image, src_palette, dst_palette):
         if image.ndim != 3 and image.shape[2] != 3:
             raise RuntimeError(f"Image does not have the right dimensions.")
         out = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
-        if dst_colormap is not None:
+        if dst_palette is not None:
             dst = np.zeros_like(out, dtype=np.uint8)
         else:
             dst = out
@@ -73,14 +73,14 @@ class Dither:
         # import pdb; pdb.set_trace()
         for i in range(1, rows-1):
             for j in range(1, cols-1):
-                idx, _ = ct.l2_dist(out[i, j, :], src_colormap)
+                idx, _ = ct.l2_dist(out[i, j, :], src_palette)
                 new_color_idx = idx[0]
                 if new_color_idx == 0:
                     new_color_idx = 1
-                new_color_ij = src_colormap[new_color_idx]
+                new_color_ij = src_palette[new_color_idx]
                 err = out[i][j] - new_color_ij
                 out[i][j] = new_color_ij
-                dst[i][j] = dst_colormap[new_color_idx]
+                dst[i][j] = dst_palette[new_color_idx]
                 # error diffusion step
                 out[i    ][j + 1] = out[i    ][j + 1] + (0.5 * err)
                 out[i + 1][j    ] = out[i + 1][j    ] + (0.5 * err)
@@ -139,6 +139,42 @@ class Dither:
                     err = out[i][j]
                     out[i][j] = 0
                 # error diffusion step
+                # out[i:i+2, j-1:j+2] = out[i:i+2, j-1:j+2] + err_diff * err
+                out[i    ][j + 1] = out[i    ][j + 1] + (Dither._7o16 * err)
+                out[i + 1][j - 1] = out[i + 1][j - 1] + (Dither._3o16 * err)
+                out[i + 1][j    ] = out[i + 1][j    ] + (Dither._5o16 * err)
+                out[i + 1][j + 1] = out[i + 1][j + 1] + (Dither._1o16 * err)
+        out = np.clip(out, 0, 1)
+        out = (out*255).astype(np.uint8)
+        return (out[1:rows - 1, 1:cols - 1])
+
+    @staticmethod
+    def floyd_steinberg_colormap(image, src_palette, dst_palette=None):
+        """
+        err_diff_matrix = [[          *    7/16   ],
+                           [   3/16  5/16  1/16   ]]
+
+
+        """
+        if image.ndim != 3 and image.shape[2] != 3:
+            raise RuntimeError(f"Image does not have the right dimensions.")
+        out = cv.copyMakeBorder(image, 1, 1, 1, 1, cv.BORDER_REPLICATE)
+        if dst_palette is not None:
+            dst = np.zeros_like(out, dtype=np.uint8)
+        else:
+            dst = out
+        rows, cols, _ = out.shape
+        # import pdb; pdb.set_trace()
+        for i in range(1, rows-1):
+            for j in range(1, cols-1):
+                idx, _ = ct.l2_dist(out[i, j, :], src_palette)
+                new_color_idx = idx[0]
+                if new_color_idx == 0:
+                    new_color_idx = 1
+                new_color_ij = src_palette[new_color_idx]
+                err = out[i][j] - new_color_ij
+                out[i][j] = new_color_ij
+                dst[i][j] = dst_palette[new_color_idx]
                 # out[i:i+2, j-1:j+2] = out[i:i+2, j-1:j+2] + err_diff * err
                 out[i    ][j + 1] = out[i    ][j + 1] + (Dither._7o16 * err)
                 out[i + 1][j - 1] = out[i + 1][j - 1] + (Dither._3o16 * err)

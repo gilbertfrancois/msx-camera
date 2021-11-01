@@ -35,7 +35,7 @@ class MSXColor:
 
     def style1(self, frame_rgbi, params={}):
         fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
-        fg = Dither.dither(fg, Dither.FLOYD_STEINBERG)
+        fg = Dither.dither(fg, Dither.SIMPLE)
         # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_labf, ct.rgbi2labf, True)
         #b bg = self.bg_map(frame_rgbi, params, self.palette_msx1_rgbf, ct.rgbi2rgbf, True)
         bg = self.bg_map(frame_rgbi, params, self.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy, True)
@@ -64,10 +64,9 @@ class MSXColor:
         scales = np.array([scales]).astype(np.float64)
         if params.get("contrast") is not None and params.get("contrast") > 0:
             frame_rgbi = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
-        rows, cols = frame_rgbi.shape[:2]
         frame_cvt = cvt_fn(frame_rgbi) 
         palette_scaled = palette * scales
-        frame_rgbi = Dither.simple_colormap(frame_cvt, palette_scaled, self.palette_msx1_rgbi)
+        frame_rgbi = Dither.floyd_steinberg_colormap(frame_cvt, palette_scaled, self.palette_msx1_rgbi)
         return frame_rgbi
 
     def fg_map(self, image:np.ndarray, params: Dict, palette: np.ndarray, cvt_fn) -> np.ndarray:

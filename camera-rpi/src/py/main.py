@@ -10,6 +10,7 @@ from kivy.uix.camera import Camera
 from kivy.lang import Builder
 from kivy.uix.anchorlayout import AnchorLayout
 
+import threading
 import numpy as np
 import cv2 as cv
 from msxcolor import MSXColor
@@ -24,17 +25,20 @@ Builder.load_file('mainwindow.kv')
 
 
 class CamView(AnchorLayout):
+
+    stop = threading.Event()
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.clock = Clock.schedule_interval(self.update, 1.0 / 5.0)
+        self.clock = Clock.schedule_interval(self.update, 2.0 / 1.0)
         self.camera = self.ids["camera"]
         self.processed_frame = self.ids["processed_frame"]
         self.frame_count = 0
         self.msx_color = MSXColor()
+        # threading.Thread(target=self.update).start()
 
     def update(self, dt):
         tic = time.time()
-        self.frame_count += 1
         camera = self.ids["camera"]
         params = {
             "contrast": self.ids["contrast"].value,
@@ -55,8 +59,7 @@ class CamView(AnchorLayout):
                 frame = cv.cvtColor(frame, cv.COLOR_GRAY2RGB)
             self.update_frame(frame)
         toc = time.time()
-        
-        print(f"Chrono update: {toc - tic:0.3f} sec.")
+        print(f"Chrono update: {toc - tic:0.3f} sec, {time.time()}")
 
 
     @mainthread
@@ -66,13 +69,11 @@ class CamView(AnchorLayout):
         self.processed_frame.texture.blit_buffer(frame.tobytes(), colorfmt="rgb", bufferfmt="ubyte")
 
 
-
 class MSXCamApp(App):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.camview = CamView()
-
 
     def build(self):
         return self.camview
