@@ -29,11 +29,11 @@ class MSXColor:
 
     def screen2(self, src, fg_style=1, bg_style="hsv", params={}):
         src = cv.resize(src, (256, 192), interpolation=cv.INTER_LINEAR)
-        # frame = self.style1(src, params)
-        frame = self.style2(src, params, self.palette_msx1_labf, ct.rgbi2labf)
+        frame = self.style1(src, params)
+        # frame = self.style2(src, params, self.palette_msx1_labf, ct.rgbi2labf)
         return frame
 
-    def style1(self, frame_rgbi, params={}):
+    def style1(self, frame_rgbi: np.ndarray, params: Dict) -> np.ndarray:
         fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
         fg = Dither.dither(fg, Dither.SIMPLE)
         # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_labf, ct.rgbi2labf, True)
@@ -173,7 +173,7 @@ class MSXColor:
 if __name__ == "__main__":
     msx_color = MSXColor()
     # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
-    src = cv.imread("pic1.jpg")
+    src = cv.imread("in/test1.jpg")
     src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
     src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
     dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
