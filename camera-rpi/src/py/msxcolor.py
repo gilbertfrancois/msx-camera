@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, List, Dict
 import logging
+import glob
+import os
 from dither import Dither
 from adjustment import Adjustment
 import color_transform as ct
@@ -140,13 +142,17 @@ class MSXColor:
         axs[1].imshow(img2)
         plt.show()
 
-    def _plot3(self, img1, img2, img3, img4):
+    def _plot3(self, img1, img2, img3, img4, output_path=None):
         fig, axs = plt.subplots(2, 2)
         axs[0][0].imshow(img1)
         axs[1][0].imshow(img2)
         axs[0][1].imshow(img3)
         axs[1][1].imshow(img4)
-        plt.show()
+        if output_path is None:
+            plt.show()
+        else:
+            plt.savefig(output_path)
+            plt.close()
 
     def _plot_vectors_2d(self, cmap, pixel_hsvr):
         head_width = np.max(cmap)*.05
@@ -172,15 +178,18 @@ class MSXColor:
 
 if __name__ == "__main__":
     msx_color = MSXColor()
-    # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
-    src = cv.imread("in/test1.jpg")
-    src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
-    src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
-    dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
-    dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
-    dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
-    # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
-    # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
-    msx_color._plot3(src, dst, dst2, dst3)
+    image_list = glob.glob("in/*.jpg")
+    for image_path in image_list:
+        # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
+        src = cv.imread(image_path)
+        src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
+        src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
+        dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
+        dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
+        dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
+        # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
+        # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
+        output_path = os.path.join("out", os.path.basename(image_path))
+        msx_color._plot3(src, dst, dst2, dst3, output_path)
 
 
