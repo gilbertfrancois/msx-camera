@@ -142,12 +142,18 @@ class MSXColor:
         axs[1].imshow(img2)
         plt.show()
 
-    def _plot3(self, img1, img2, img3, img4, output_path=None):
-        fig, axs = plt.subplots(2, 2)
+    def _plot3(self, img1, img2, img3, img4, title_list=None, output_path=None):
+        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
         axs[0][0].imshow(img1)
         axs[1][0].imshow(img2)
         axs[0][1].imshow(img3)
         axs[1][1].imshow(img4)
+        if title_list is not None:
+            axs[0][0].set_title(title_list[0])
+            axs[1][0].set_title(title_list[1])
+            axs[0][1].set_title(title_list[2])
+            axs[1][1].set_title(title_list[3])
+
         if output_path is None:
             plt.show()
         else:
@@ -187,6 +193,7 @@ if __name__ == "__main__":
         dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
         dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
         dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
+        title_list = ["source", "labf", "hsvf", "rgbf"]
         # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
         # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
         output_path = os.path.join("out", os.path.basename(image_path))
