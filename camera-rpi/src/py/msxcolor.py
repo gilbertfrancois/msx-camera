@@ -185,6 +185,7 @@ class MSXColor:
 if __name__ == "__main__":
     msx_color = MSXColor()
     image_list = glob.glob("in/*.jpg")
+    image_list += glob.glob("in/*.png")
     for image_path in image_list:
         # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
         src = cv.imread(image_path)
