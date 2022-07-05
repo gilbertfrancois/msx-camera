@@ -192,3 +192,5 @@ tags
 bin/glass.jar
  
 .venv
+__pycache__
+.ipynb_checkpoints
