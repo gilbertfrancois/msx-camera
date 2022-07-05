@@ -87,6 +87,9 @@ class MSXCamApp(App):
 
 if __name__ == '__main__':
     Config.set('kivy', 'exit_on_escape', '1')
+    Config.set('graphics', 'width', '800')
+    Config.set('graphics', 'height', '480')
     Config.set('graphics', 'resizable', 1)
-    Window.fullscreen = False
+    # Config.set('graphics', 'resizable', 0)
+    # Window.fullscreen = False
     MSXCamApp().run()

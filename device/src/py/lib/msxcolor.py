@@ -41,6 +41,9 @@ class MSXColor:
         return frame
 
     def style1(self, frame_rgbi: np.ndarray, params: Dict) -> np.ndarray:
+        """ Dither fg in b/w, compute background color per 1x8 line.
+
+        """
         fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
         fg = Dither.dither(fg, params.get("dither"))
         # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_labf, ct.rgbi2labf, True)
@@ -281,6 +284,6 @@ if __name__ == "__main__":
         # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
         # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
         output_path = os.path.join("out", os.path.basename(image_path))
-        msx_color._plot3(src, dst, dst2, dst3, output_path)
+        msx_color._plot3(src, dst, dst2, dst3, title_list)
 
 

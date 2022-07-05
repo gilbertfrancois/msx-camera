@@ -2,7 +2,21 @@ import cv2 as cv
 import numpy as np
 
 def rgbi2rgbf(image: np.ndarray) -> np.ndarray:
-    return image / 255.0
+    """ RGB to RGB in (x, y, z) coordinates as float in [-1, 1].
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Input image as np.uint8
+
+    Returns
+    -------
+    np.array
+        [red, green, blue] as float in [-1, 1]
+    """
+    image = image / 255.0
+    image = 2*image - 1.0
+    return image
 
 
 def rgbi2hsvi(image: np.ndarray) -> np.ndarray:
@@ -53,7 +67,7 @@ def rgbi2hsvf_xy(image: np.ndarray) -> np.ndarray:
     Returns
     -------
     np.array
-        [sat * cos(hue), sat * sin(hue), value] as float in [0, 1]
+        [sat * cos(hue), sat * sin(hue), value] as float in [-1, 1]
     """
     dst = rgbi2hsvf(image)
     x = dst[:, :, 1] * np.cos(dst[:, :, 0])
@@ -64,6 +78,18 @@ def rgbi2hsvf_xy(image: np.ndarray) -> np.ndarray:
     return dst
 
 def rgbi2labf(image: np.ndarray) -> np.ndarray:
+    """ RGB to CieLAB in (x, y, z) coordinates as float in [-1, 1].
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Input image as np.uint8
+
+    Returns
+    -------
+    np.array
+        [a, b, lum] as float in [-1, 1]
+    """
     dst = cv.cvtColor(image, cv.COLOR_RGB2LAB)
     dst = dst / 255
     # dst = 2*dst - 1
