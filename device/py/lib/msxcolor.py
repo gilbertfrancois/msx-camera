@@ -113,6 +113,35 @@ class MSXColor:
         palette = self.get_palette(params)
         cvt_fn = self.get_convert_function(params)
         return self.fg_map(image, params, palette, cvt_fn, with_index)
+
+    def cvt_color_by_idx(self, src_image_idx, src_palette, params):
+        """
+        - convert palette to map idx
+        - convert image_idx to new idx
+        - return dst_rgb, dst_idx, dst_palette
+
+        src_image_idx: np.ndarray
+            Source image with color indices, ndim = 2, shape = [r, c]
+        src_palette: np.ndarray
+            Source palette with N colors, ndim = 2, shape = [N, 3]
+        params: Dict
+            Parameter dictionary
+
+        Returns
+        -------
+        (np.ndarray, np.ndarray, np.ndarray)
+            Tuple with (dst_color, dst_index, dst_palette)
+        
+        """
+        dst_palette = self.get_palette(params)
+        dst_cvt_fn = self.get_convert_function(params)
+        if src_palette.ndim == 2:
+            src_palette = src_palette.reshape(-1, 1, 3)
+        _, transform_map = self.fg_map(src_palette, params, dst_palette, dst_cvt_fn, with_index=True)
+        transform_map = transform_map.squeeze()
+        dst_index = transform_map[src_image_idx]
+        dst_color = dst_palette[src_image_idx]
+        return dst_color, dst_index, dst_palette
     
 
     def fg_map(self, image:np.ndarray, params: Dict, palette: np.ndarray, cvt_fn, with_index=False):
