@@ -1,26 +1,23 @@
 from kivy.config import Config
 
-
 from kivy.app import App
-from kivy.core.window import Window
 from kivy.clock import Clock, mainthread
 from kivy.graphics.texture import Texture
-from kivy.uix.camera import Camera
 from kivy.lang import Builder
 from kivy.uix.anchorlayout import AnchorLayout
 
-import threading
-import numpy as np
 import cv2 as cv
-from lib.msxcolor import MSXColor
 import logging
+import numpy as np
+import threading
 import time
+
+from msxcolor import MSXColor
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 Builder.load_file('mainwindow.kv')
-# Builder.load_file('toolbox.kv')
 
 
 class CamView(AnchorLayout):
@@ -29,7 +26,7 @@ class CamView(AnchorLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.clock = Clock.schedule_interval(self.update, 2.0 / 1.0)
+        self.clock = Clock.schedule_interval(self.update, 1.0 / 2.0)
         self.camera = self.ids["camera"]
         self.processed_frame = self.ids["processed_frame"]
         self.frame_count = 0
@@ -47,10 +44,10 @@ class CamView(AnchorLayout):
         tic = time.time()
         camera = self.ids["camera"]
         params = {
-            "contrast": self.ids["contrast"].value,
-            "hue": self.ids["hue"].value / 100,
-            "sat": self.ids["sat"].value / 100,
-            "lum": self.ids["lum"].value / 100,
+            "contrast": int(self.ids["contrast"].value),
+            "brightness": int(self.ids["brightness"].value),
+            "style": 1,
+            "dither": 1
         }
         texture = camera.texture
         if texture is not None:
@@ -58,7 +55,7 @@ class CamView(AnchorLayout):
             frame = frame.reshape(texture.height, texture.width, 4)
             frame = frame[:, :, :3]
             frame = np.flipud(frame)
-            frame = self.msx_color.screen2(frame, fg_style=1, bg_style=None, params=params)
+            frame = self.msx_color.screen2(frame, params=params)
             assert frame.ndim == 3
             assert frame.shape[2] == 3
             if frame.ndim == 2:
@@ -87,8 +84,8 @@ class MSXCamApp(App):
 
 if __name__ == '__main__':
     Config.set('kivy', 'exit_on_escape', '1')
-    Config.set('graphics', 'width', '800')
-    Config.set('graphics', 'height', '480')
+    Config.set('graphics', 'width', '1280')
+    Config.set('graphics', 'height', '800')
     Config.set('graphics', 'resizable', 1)
     # Config.set('graphics', 'resizable', 0)
     # Window.fullscreen = False

@@ -1,10 +1,8 @@
 import cv2 as cv
 import numpy as np
-import matplotlib.pyplot as plt
-from typing import Tuple, List
+# import matplotlib.pyplot as plt
 import logging
-import time
-import lib.color_transform as ct
+import color_transform as ct
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -128,7 +126,6 @@ class Dither:
         out = cv.copyMakeBorder(out, 1, 1, 1, 1, cv.BORDER_REPLICATE)
         rows, cols = np.shape(out)
         # out = cv.normalize(out.astype(np.float32), None, 0.0, 1.0, cv.NORM_MINMAX)
-        outid1 = id(out)
         for i in range(1, rows - 1):
             for j in range(1, cols - 1):
                 # threshold step

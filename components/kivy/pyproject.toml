@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "msx-digitizer-kivy"
+version = "0.1.0"
+description = ""
+authors = ["Gilbert Francois Duivesteijn <info@gilbertfrancois.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+Kivy = "^2.1.0"
+Cython = "^0.29.30"
+numpy = "^1.23.1"
+opencv-python-headless = "^4.6.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

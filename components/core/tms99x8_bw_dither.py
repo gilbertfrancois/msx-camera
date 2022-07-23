@@ -1,8 +1,8 @@
 import cv2 as cv
 import numpy as np
-from lib.tms99x8 import TMS99x8
-from lib.adjustment import Adjustment
-from lib.dither import Dither
+from tms99x8 import TMS99x8
+from adjustment import Adjustment
+from dither import Dither
 
 class TMS99x8_BW_Dither(TMS99x8):
 

@@ -13,38 +13,24 @@
             orientation: 'vertical'
             padding: 2
 
+            Label:
+                text: "Brightness"
+            
+            Slider:
+                id: brightness
+                min: -50
+                max: 50
+                value: 0 
+
+            Label:
+                text: "Contrast"
+
             Slider:
                 id: contrast
                 min: 0
                 max: 100
-                value: 0 
+                value: 50 
 
-            Slider:
-                id: hue
-                min: 0
-                max: 200
-                value: 100 
-
-            Slider:
-                id: sat
-                min: 0
-                max: 200
-                value: 100 
-
-            Slider:
-                id: lum
-                min: 0
-                max: 200
-                value: 100 
-
-            Button:
-                text: "Style 1"
-                id: button_style3
-                on_press: root.button_style_1_pressed()
-            Button:
-                text: "Style 2"
-                id: button_style3
-                on_press: root.button_style_2_pressed()
             Camera:
                 id: camera
                 resolution: (640, 480)

@@ -1,13 +1,12 @@
 import cv2 as cv
+import time
 import numpy as np
-import matplotlib.pyplot as plt
-from typing import Tuple, List, Dict
+# import matplotlib.pyplot as plt
+from typing import Dict
 import logging
-import glob
-import os
-from lib.dither import Dither
-from lib.adjustment import Adjustment
-import lib.color_transform as ct
+from dither import Dither
+from adjustment import Adjustment
+import color_transform as ct
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -44,11 +43,14 @@ class MSXColor:
         """ Dither fg in b/w, compute background color per 1x8 line.
 
         """
-        fg = Adjustment.contrast_scurve(frame_rgbi, params.get("contrast"))
+        fg = Adjustment.brightness(frame_rgbi, params.get("brightness"))
+        fg = Adjustment.contrast_scurve(fg, params.get("contrast"))
         fg = Dither.dither(fg, params.get("dither"))
+        if fg.ndim != 3:
+            fg = cv.cvtColor(fg, cv.COLOR_GRAY2RGB)
         # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_labf, ct.rgbi2labf, True)
-        bg = self.bg_map(frame_rgbi, params, self.palette_msx1_rgbi, ct.rgbi2rgbf, True)
-        # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy, True)
+        # bg = self.bg_map(frame_rgbi, params, self.palette_msx1_rgbi, ct.rgbi2rgbf, True)
+        bg = self.bg_map(frame_rgbi, params, self.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy, True)
         frame = self._blend(fg, bg)
         return frame
 
@@ -248,71 +250,70 @@ class MSXColor:
         dst = np.clip(dst, 0, 255)
         return dst
 
-    def _plot2(self, img1, img2):
-        fig, axs = plt.subplots(1, 2, figsize=(12, 8))
-        if img1.ndim != 3:
-            axs[0].imshow(img1, cmap="gray")
-        else:
-            axs[0].imshow(img1)
-        axs[1].imshow(img2)
-        plt.show()
+    # def _plot2(self, img1, img2):
+    #     fig, axs = plt.subplots(1, 2, figsize=(12, 8))
+    #     if img1.ndim != 3:
+    #         axs[0].imshow(img1, cmap="gray")
+    #     else:
+    #         axs[0].imshow(img1)
+    #     axs[1].imshow(img2)
+    #     plt.show()
 
-    def _plot3(self, img1, img2, img3, img4, title_list=None, output_path=None):
-        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-        axs[0][0].imshow(img1)
-        axs[1][0].imshow(img2)
-        axs[0][1].imshow(img3)
-        axs[1][1].imshow(img4)
-        if title_list is not None:
-            axs[0][0].set_title(title_list[0])
-            axs[1][0].set_title(title_list[1])
-            axs[0][1].set_title(title_list[2])
-            axs[1][1].set_title(title_list[3])
+    # def _plot3(self, img1, img2, img3, img4, title_list=None, output_path=None):
+    #     fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+    #     axs[0][0].imshow(img1)
+    #     axs[1][0].imshow(img2)
+    #     axs[0][1].imshow(img3)
+    #     axs[1][1].imshow(img4)
+    #     if title_list is not None:
+    #         axs[0][0].set_title(title_list[0])
+    #         axs[1][0].set_title(title_list[1])
+    #         axs[0][1].set_title(title_list[2])
+    #         axs[1][1].set_title(title_list[3])
+    #     if output_path is None:
+    #         plt.show()
+    #     else:
+    #         plt.savefig(output_path)
+    #         plt.close()
 
-        if output_path is None:
-            plt.show()
-        else:
-            plt.savefig(output_path)
-            plt.close()
+    # def _plot_vectors_2d(self, cmap, pixel_hsvr):
+    #     head_width = np.max(cmap)*.05
+    #     plt.figure()
+    #     for index, pixel in enumerate(cmap):
+    #         plt.arrow(0, 0, pixel[0,0], pixel[0,1], color=f"#{self.hex_color_list[index]}", head_width=head_width, head_length=head_width)
+    #     if pixel_hsvr is not None:
+    #         plt.arrow(0, 0, pixel_hsvr[0,0], pixel_hsvr[0,1], color=f"black", head_width=head_width, head_length=head_width)
+    #     plt.show()
 
-    def _plot_vectors_2d(self, cmap, pixel_hsvr):
-        head_width = np.max(cmap)*.05
-        plt.figure()
-        for index, pixel in enumerate(cmap):
-            plt.arrow(0, 0, pixel[0,0], pixel[0,1], color=f"#{self.hex_color_list[index]}", head_width=head_width, head_length=head_width)
-        if pixel_hsvr is not None:
-            plt.arrow(0, 0, pixel_hsvr[0,0], pixel_hsvr[0,1], color=f"black", head_width=head_width, head_length=head_width)
-        plt.show()
+    # def _plot_vectors_3d(self, vectors: np.ndarray, color_list: List[str]):
+    #     head_width = np.max(vectors)*.05
+    #     plt.figure()
+    #     ax = plt.gca(projection="3d")
+    #     # zero = np.zeros_like(cmap[: , 0])
+    #     zero = 0
+    #     for i in range(vectors.shape[0]):
+    #         ax.quiver(zero, zero, zero, vectors[i, 0], vectors[i, 1], vectors[i, 2], color=color_list[i])
+    #     ax.set_xlim(-1, 1)
+    #     ax.set_ylim(-1, 1)
+    #     ax.set_zlim(0, 1)
+    #     plt.show()
 
-    def _plot_vectors_3d(self, vectors: np.ndarray, color_list: List[str]):
-        head_width = np.max(vectors)*.05
-        plt.figure()
-        ax = plt.gca(projection="3d")
-        # zero = np.zeros_like(cmap[: , 0])
-        zero = 0
-        for i in range(vectors.shape[0]):
-            ax.quiver(zero, zero, zero, vectors[i, 0], vectors[i, 1], vectors[i, 2], color=color_list[i])
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
-        ax.set_zlim(0, 1)
-        plt.show()
-
-if __name__ == "__main__":
-    msx_color = MSXColor()
-    image_list = glob.glob("in/*.jpg")
-    image_list += glob.glob("in/*.png")
-    for image_path in image_list:
-        # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
-        src = cv.imread(image_path)
-        src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
-        src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
-        dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
-        dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
-        dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
-        title_list = ["source", "labf", "hsvf", "rgbf"]
-        # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
-        # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
-        output_path = os.path.join("out", os.path.basename(image_path))
-        msx_color._plot3(src, dst, dst2, dst3, title_list)
+# if __name__ == "__main__":
+#     msx_color = MSXColor()
+#     image_list = glob.glob("in/*.jpg")
+#     image_list += glob.glob("in/*.png")
+#     for image_path in image_list:
+#         # src = cv.imread("../../../resources/_RGB_24bits_palette_color_test_chart.png")
+#         src = cv.imread(image_path)
+#         src = cv.cvtColor(src, cv.COLOR_BGR2RGB)
+#         src = cv.resize(src, (256,192), interpolation=cv.INTER_LINEAR)
+#         dst = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_labf, ct.rgbi2labf)
+#         dst2 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_hsvf_xy, ct.rgbi2hsvf_xy)
+#         dst3 = msx_color.fg_map(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0}, msx_color.palette_msx1_rgbf, ct.rgbi2rgbf)
+#         title_list = ["source", "labf", "hsvf", "rgbf"]
+#         # dst2 = msx_color.style2(src.copy(), {"hue": 1.0, "sat": 1.0, "lum": 1.0})
+#         # dst3 = msx_color.style1(src.copy(), {"contrast": 30, "hue": 1.0, "sat": 1.0, "lum": 1.0})
+#         output_path = os.path.join("out", os.path.basename(image_path))
+#         msx_color._plot3(src, dst, dst2, dst3, title_list)
 
 
